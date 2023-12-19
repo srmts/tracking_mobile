@@ -27,6 +27,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.telephony.TelephonyManager
 import android.text.InputType
 import android.util.Log
 import android.view.Menu
@@ -37,7 +39,9 @@ import android.webkit.URLUtil
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.preference.EditTextPreference
 import androidx.preference.EditTextPreferenceDialogFragmentCompat
 import androidx.preference.Preference
@@ -46,6 +50,7 @@ import androidx.preference.PreferenceManager
 import androidx.preference.TwoStatePreference
 import dev.doubledot.doki.ui.DokiActivity
 import java.util.*
+
 
 class MainFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeListener {
 
@@ -192,12 +197,44 @@ class MainFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeListene
 
     private fun initPreferences() {
         PreferenceManager.setDefaultValues(requireActivity(), R.xml.preferences, false)
-        if (!sharedPreferences.contains(KEY_DEVICE)) {
-            val id = (Random().nextInt(900000) + 100000).toString()
+//            val id = (Random().nextInt(900000) + 100000).toString()
+            val  id = getIMEI()
+            Log.i("device id", id);
+            Log.i("device key", KEY_DEVICE);
             sharedPreferences.edit().putString(KEY_DEVICE, id).apply()
             findPreference<EditTextPreference>(KEY_DEVICE)?.text = id
-        }
+
         findPreference<Preference>(KEY_DEVICE)?.summary = sharedPreferences.getString(KEY_DEVICE, null)
+    }
+
+    private fun getIMEI(): String {
+        val telephonyManager = requireActivity().getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Starting from Android 10, accessing IMEI requires READ_PRIVILEGED_PHONE_STATE
+            // As third-party apps don't have this permission, use an alternative identifier
+            Settings.Secure.getString(
+                requireContext().contentResolver,
+                Settings.Secure.ANDROID_ID
+            ) ?: ""
+        } else {
+            // For versions below Android 10, you can use the IMEI directly
+            if (ActivityCompat.checkSelfPermission(
+                    requireContext(),
+                    android.Manifest.permission.READ_PHONE_STATE
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                telephonyManager.imei ?: ""
+            } else {
+                // Request the READ_PHONE_STATE permission
+                ActivityCompat.requestPermissions(
+                    requireActivity(),
+                    arrayOf(android.Manifest.permission.READ_PHONE_STATE),
+                    101
+                )
+                ""
+            }
+        }
     }
 
     private fun showBackgroundLocationDialog(context: Context, onSuccess: () -> Unit) {
