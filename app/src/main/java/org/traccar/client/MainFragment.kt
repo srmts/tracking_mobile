@@ -41,7 +41,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.preference.EditTextPreference
 import androidx.preference.EditTextPreferenceDialogFragmentCompat
 import androidx.preference.Preference
@@ -49,6 +48,14 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import androidx.preference.TwoStatePreference
 import dev.doubledot.doki.ui.DokiActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Response
+import retrofit2.Callback
 import java.util.*
 
 
@@ -195,16 +202,50 @@ class MainFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeListene
         return super.onOptionsItemSelected(item)
     }
 
+
     private fun initPreferences() {
         PreferenceManager.setDefaultValues(requireActivity(), R.xml.preferences, false)
-//            val id = (Random().nextInt(900000) + 100000).toString()
-            val  id = getIMEI()
-            Log.i("device id", id);
-            Log.i("device key", KEY_DEVICE);
-            sharedPreferences.edit().putString(KEY_DEVICE, id).apply()
-            findPreference<EditTextPreference>(KEY_DEVICE)?.text = id
+
+        // val id = (Random().nextInt(900000) + 100000).toString()
+        val id = getIMEI()
+        Log.i("device id", id)
+        Log.i("device key", KEY_DEVICE)
+        sharedPreferences.edit().putString(KEY_DEVICE, id).apply()
+        findPreference<EditTextPreference>(KEY_DEVICE)?.text = id
 
         findPreference<Preference>(KEY_DEVICE)?.summary = sharedPreferences.getString(KEY_DEVICE, null)
+
+        // Asynchronously initiate Retrofit call
+        CoroutineScope(Dispatchers.IO).launch {
+            setDivice(id)
+        }
+    }
+
+    private suspend fun setDivice(unique: String) {
+        try {
+            val apiService = RetrofitClient.apiService
+
+            val body = PostData("HP: $unique", unique, Attributes("Username_AO"))
+
+            apiService.postRequest(body).enqueue(object : Callback<ResponseBody> {
+                override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                    if (response.isSuccessful) {
+                        val responseBody = response.body()
+                        println("Response berhasil: $responseBody")
+                    } else {
+                        println("Gagal melakukan request. Error code: ${response.code()}")
+                    }
+                }
+
+                override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                    println("Error: ${t.message}")
+                }
+            })
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                println("Error: ${e.message}")
+            }
+        }
     }
 
     private fun getIMEI(): String {
